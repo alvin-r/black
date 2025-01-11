@@ -454,18 +454,21 @@ def preceding_leaf(node: Optional[LN]) -> Optional[Leaf]:
 
 def prev_siblings_are(node: Optional[LN], tokens: list[Optional[NodeType]]) -> bool:
     """Return if the `node` and its previous siblings match types against the provided
-    list of tokens; the provided `node`has its type matched against the last element in
+    list of tokens; the provided `node` has its type matched against the last element in
     the list.  `None` can be used as the first element to declare that the start of the
     list is anchored at the start of its parent's children."""
-    if not tokens:
-        return True
-    if tokens[-1] is None:
-        return node is None
-    if not node:
-        return False
-    if node.type != tokens[-1]:
-        return False
-    return prev_siblings_are(node.prev_sibling, tokens[:-1])
+
+    # Use iteration instead of recursion to avoid the overhead of frequent function calls
+    index = len(tokens) - 1
+    while index >= 0:
+        if tokens[index] is None:
+            return node is None
+        if not node or node.type != tokens[index]:
+            return False
+        node = node.prev_sibling
+        index -= 1
+        
+    return True
 
 
 def parent_type(node: Optional[LN]) -> Optional[NodeType]:
