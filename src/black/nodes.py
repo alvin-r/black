@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -625,11 +627,23 @@ def is_tuple_containing_star(node: LN) -> bool:
     """Return True if `node` holds a tuple that contains a star operator."""
     if node.type != syms.atom:
         return False
-    gexp = unwrap_singleton_parenthesis(node)
-    if gexp is None or gexp.type != syms.testlist_gexp:
+
+    # Unwrap and check conditions in a single pass for early exit
+    children = node.children
+    if len(children) != 3 or children[0].type != token.LPAR or children[2].type != token.RPAR:
         return False
 
-    return any(child.type == syms.star_expr for child in gexp.children)
+    # Direct reference to potential testlist_gexp wrapped node
+    wrapped = children[1]
+    if wrapped.type != syms.testlist_gexp:
+        return False
+
+    # Check for star expression in children of `wrapped`
+    for child in wrapped.children:
+        if child.type == syms.star_expr:
+            return True
+
+    return False
 
 
 def is_generator(node: LN) -> bool:
