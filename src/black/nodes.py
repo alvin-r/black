@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -634,13 +636,16 @@ def is_tuple_containing_star(node: LN) -> bool:
 
 def is_generator(node: LN) -> bool:
     """Return True if `node` holds a generator."""
-    if node.type != syms.atom:
+    # Check if node is an atom
+    if node.type != syms.atom or len(node.children) != 3:
         return False
-    gexp = unwrap_singleton_parenthesis(node)
-    if gexp is None or gexp.type != syms.testlist_gexp:
+    
+    lpar, wrapped, rpar = node.children
+    # Verify wrapped structure and type
+    if lpar.type != token.LPAR or rpar.type != token.RPAR or wrapped.type != syms.testlist_gexp:
         return False
 
-    return any(child.type == syms.old_comp_for for child in gexp.children)
+    return any(child.type == syms.old_comp_for for child in wrapped.children)
 
 
 def is_one_sequence_between(
