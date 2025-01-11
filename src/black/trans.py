@@ -1338,43 +1338,39 @@ def iter_fexpr_spans(s: str) -> Iterator[tuple[int, int]]:
     string is invalid.
     """
     stack: list[int] = []  # our curly paren stack
-    i = 0
-    while i < len(s):
-        if s[i] == "{":
-            # if we're in a string part of the f-string, ignore escaped curly braces
-            if not stack and i + 1 < len(s) and s[i + 1] == "{":
+    i, length = 0, len(s)
+    
+    while i < length:
+        char = s[i]
+        
+        if char == "{":
+            if stack or (i + 1 < length and s[i + 1] == "{"):
                 i += 2
-                continue
-            stack.append(i)
-            i += 1
-            continue
-
-        if s[i] == "}":
-            if not stack:
+            else:
+                stack.append(i)
                 i += 1
-                continue
-            j = stack.pop()
-            # we've made it back out of the expression! yield the span
-            if not stack:
-                yield (j, i + 1)
+        elif char == "}":
+            if stack:
+                j = stack.pop()
+                if not stack:
+                    yield (j, i + 1)
             i += 1
-            continue
-
-        # if we're in an expression part of the f-string, fast-forward through strings
-        # note that backslashes are not legal in the expression portion of f-strings
-        if stack:
-            delim = None
+        elif stack:  # Handle strings within expressions
             if s[i : i + 3] in ("'''", '"""'):
                 delim = s[i : i + 3]
-            elif s[i] in ("'", '"'):
-                delim = s[i]
-            if delim:
-                i += len(delim)
-                while i < len(s) and s[i : i + len(delim)] != delim:
-                    i += 1
-                i += len(delim)
+                i += 3
+            elif char in ("'", '"'):
+                delim = char
+                i += 1
+            else:
+                i += 1
                 continue
-        i += 1
+
+            while i < length and s[i: i + len(delim)] != delim:
+                i += 1
+            i += len(delim)
+        else:
+            i += 1
 
 
 def fstring_contains_expr(s: str) -> bool:
