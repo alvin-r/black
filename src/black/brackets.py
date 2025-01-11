@@ -145,7 +145,14 @@ class BracketTracker:
         Values are consistent with what `is_split_*_delimiter()` return.
         Raises ValueError on no delimiters.
         """
-        return max(v for k, v in self.delimiters.items() if k not in exclude)
+        max_priority = None
+        for k, v in self.delimiters.items():
+            if k not in exclude:
+                if max_priority is None or v > max_priority:
+                    max_priority = v
+        if max_priority is None:
+            raise ValueError("No delimiters available")
+        return max_priority
 
     def delimiter_count_with_priority(self, priority: Priority = 0) -> int:
         """Return the number of delimiters with the given `priority`.
@@ -155,8 +162,14 @@ class BracketTracker:
         if not self.delimiters:
             return 0
 
-        priority = priority or self.max_delimiter_priority()
-        return sum(1 for p in self.delimiters.values() if p == priority)
+        if priority == 0:
+            priority = self.max_delimiter_priority()
+
+        count = 0
+        for p in self.delimiters.values():
+            if p == priority:
+                count += 1
+        return count
 
     def maybe_increment_for_loop_variable(self, leaf: Leaf) -> bool:
         """In a for loop, or comprehension, the variables are often unpacks.
