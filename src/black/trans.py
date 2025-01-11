@@ -219,17 +219,16 @@ def is_expression_chained(chained_leaves: list[Leaf]) -> bool:
     if len(chained_leaves) < 2:
         return True
 
-    current_leaf = chained_leaves[-1]
-    past_leaf = chained_leaves[-2]
+    current_leaf_type = chained_leaves[-1].type
+    past_leaf_type = chained_leaves[-2].type
 
-    if past_leaf.type == token.NAME:
-        return current_leaf.type in {token.DOT}
-    elif past_leaf.type in {token.RPAR, token.RSQB}:
-        return current_leaf.type in {token.RSQB, token.RPAR}
-    elif past_leaf.type in {token.LPAR, token.LSQB}:
-        return current_leaf.type in {token.NAME, token.LPAR, token.LSQB}
-    else:
-        return False
+    if past_leaf_type == token.NAME:
+        return current_leaf_type == token.DOT
+    elif past_leaf_type in {token.RPAR, token.RSQB}:
+        return current_leaf_type in {token.RSQB, token.RPAR}
+    elif past_leaf_type in {token.LPAR, token.LSQB}:
+        return current_leaf_type in {token.NAME, token.LPAR, token.LSQB}
+    return False
 
 
 class StringTransformer(ABC):
