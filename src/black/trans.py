@@ -1775,53 +1775,33 @@ class StringSplitter(BaseStringSplitter, CustomSplitMapMixin):
 
     def _get_illegal_split_indices(self, string: str) -> set[Index]:
         illegal_indices: set[Index] = set()
-        iterators = [
-            self._iter_fexpr_slices(string),
-            self._iter_nameescape_slices(string),
-        ]
-        for it in iterators:
-            for begin, end in it:
-                illegal_indices.update(range(begin, end + 1))
+        for begin, end in self._iter_fexpr_slices(string):
+            illegal_indices.update(range(begin, end + 1))
+        for begin, end in self._iter_nameescape_slices(string):
+            illegal_indices.update(range(begin, end + 1))
         return illegal_indices
 
     def _get_break_idx(self, string: str, max_break_idx: int) -> Optional[int]:
         """
-        This method contains the algorithm that StringSplitter uses to
-        determine which character to split each string at.
-
-        Args:
-            @string: The substring that we are attempting to split.
-            @max_break_idx: The ideal break index. We will return this value if it
-            meets all the necessary conditions. In the likely event that it
-            doesn't we will try to find the closest index BELOW @max_break_idx
-            that does. If that fails, we will expand our search by also
-            considering all valid indices ABOVE @max_break_idx.
-
-        Pre-Conditions:
-            * assert_is_leaf_string(@string)
-            * 0 <= @max_break_idx < len(@string)
-
-        Returns:
-            break_idx, if an index is able to be found that meets all of the
-            conditions listed in the 'Transformations' section of this classes'
-            docstring.
-                OR
-            None, otherwise.
+        Contains the algorithm that StringSplitter uses to determine 
+        which character to split each string at.
         """
-        is_valid_index = is_valid_index_factory(string)
-
-        assert is_valid_index(max_break_idx)
         assert_is_leaf_string(string)
 
-        _illegal_split_indices = self._get_illegal_split_indices(string)
-
+        # Lazily fetch illegal indices when needed
+        _illegal_split_indices = None
         def breaks_unsplittable_expression(i: Index) -> bool:
             """
             Returns:
                 True iff returning @i would result in the splitting of an
                 unsplittable expression (which is NOT allowed).
             """
+            nonlocal _illegal_split_indices
+            if _illegal_split_indices is None:
+                _illegal_split_indices = self._get_illegal_split_indices(string)
             return i in _illegal_split_indices
+
+        is_valid_index = is_valid_index_factory(string)
 
         def passes_all_checks(i: Index) -> bool:
             """
@@ -1829,45 +1809,40 @@ class StringSplitter(BaseStringSplitter, CustomSplitMapMixin):
                 True iff ALL of the conditions listed in the 'Transformations'
                 section of this classes' docstring would be met by returning @i.
             """
-            is_space = string[i] == " "
-            is_split_safe = is_valid_index(i - 1) and string[i - 1] in SPLIT_SAFE_CHARS
-
+            if not is_valid_index(i):
+                return False
+            
+            # Check for space or split-safe character
+            if not (string[i] == " " or is_valid_index(i - 1) and string[i - 1] in SPLIT_SAFE_CHARS):
+                return False
+            
+            # Check for not being escaped
             is_not_escaped = True
             j = i - 1
             while is_valid_index(j) and string[j] == "\\":
                 is_not_escaped = not is_not_escaped
                 j -= 1
+            if not is_not_escaped:
+                return False
 
-            is_big_enough = (
-                len(string[i:]) >= self.MIN_SUBSTR_SIZE
-                and len(string[:i]) >= self.MIN_SUBSTR_SIZE
-            )
-            return (
-                (is_space or is_split_safe)
-                and is_not_escaped
-                and is_big_enough
-                and not breaks_unsplittable_expression(i)
-            )
+            # Check for size limitations
+            if not (len(string[i:]) >= self.MIN_SUBSTR_SIZE and len(string[:i]) >= self.MIN_SUBSTR_SIZE):
+                return False
 
-        # First, we check all indices BELOW @max_break_idx.
-        break_idx = max_break_idx
-        while is_valid_index(break_idx - 1) and not passes_all_checks(break_idx):
-            break_idx -= 1
+            # Check for unsplittable expressions
+            return not breaks_unsplittable_expression(i)
 
-        if not passes_all_checks(break_idx):
-            # If that fails, we check all indices ABOVE @max_break_idx.
-            #
-            # If we are able to find a valid index here, the next line is going
-            # to be longer than the specified line length, but it's probably
-            # better than doing nothing at all.
-            break_idx = max_break_idx + 1
-            while is_valid_index(break_idx + 1) and not passes_all_checks(break_idx):
-                break_idx += 1
+        # Check all indices below max_break_idx
+        for break_idx in range(max_break_idx, -1, -1):
+            if passes_all_checks(break_idx):
+                return break_idx
 
-            if not is_valid_index(break_idx) or not passes_all_checks(break_idx):
-                return None
+        # Check all indices above max_break_idx
+        for break_idx in range(max_break_idx + 1, len(string)):
+            if passes_all_checks(break_idx):
+                return break_idx
 
-        return break_idx
+        return None
 
     def _maybe_normalize_string_quotes(self, leaf: Leaf) -> None:
         if self.normalize_strings:
@@ -2510,20 +2485,8 @@ def insert_str_child_factory(string_leaf: Leaf) -> Callable[[LN], None]:
 
 def is_valid_index_factory(seq: Sequence[Any]) -> Callable[[int], bool]:
     """
-    Examples:
-        ```
-        my_list = [1, 2, 3]
-
-        is_valid_index = is_valid_index_factory(my_list)
-
-        assert is_valid_index(0)
-        assert is_valid_index(2)
-
-        assert not is_valid_index(3)
-        assert not is_valid_index(-1)
-        ```
+    Returns a function which checks if the given index is valid for the sequence.
     """
-
     def is_valid_index(idx: int) -> bool:
         """
         Returns:
@@ -2531,5 +2494,4 @@ def is_valid_index_factory(seq: Sequence[Any]) -> Callable[[int], bool]:
             IndexError.
         """
         return 0 <= idx < len(seq)
-
     return is_valid_index
