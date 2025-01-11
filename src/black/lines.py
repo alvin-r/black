@@ -469,13 +469,16 @@ class Line:
             yield index, leaf, length
 
     def clone(self) -> "Line":
-        return Line(
-            mode=self.mode,
-            depth=self.depth,
-            inside_brackets=self.inside_brackets,
-            should_split_rhs=self.should_split_rhs,
-            magic_trailing_comma=self.magic_trailing_comma,
-        )
+        clone_line = Line.__new__(Line)
+        clone_line.mode = self.mode
+        clone_line.depth = self.depth
+        clone_line.leaves = self.leaves
+        clone_line.comments = self.comments
+        clone_line.bracket_tracker = self.bracket_tracker
+        clone_line.inside_brackets = self.inside_brackets
+        clone_line.should_split_rhs = self.should_split_rhs
+        clone_line.magic_trailing_comma = self.magic_trailing_comma
+        return clone_line
 
     def __str__(self) -> str:
         """Render the line."""
