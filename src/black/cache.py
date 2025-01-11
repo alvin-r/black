@@ -31,18 +31,16 @@ class FileData(NamedTuple):
 def get_cache_dir() -> Path:
     """Get the cache directory used by black.
 
-    Users can customize this directory on all systems using `BLACK_CACHE_DIR`
-    environment variable. By default, the cache directory is the user cache directory
-    under the black application.
-
-    This result is immediately set to a constant `black.cache.CACHE_DIR` as to avoid
-    repeated calls.
+    Uses `BLACK_CACHE_DIR` environment variable if set;
+    otherwise defaults to the user cache directory for black,
+    appended with the current version.
     """
-    # NOTE: Function mostly exists as a clean way to test getting the cache directory.
-    default_cache_dir = user_cache_dir("black")
-    cache_dir = Path(os.environ.get("BLACK_CACHE_DIR", default_cache_dir))
-    cache_dir = cache_dir / __version__
-    return cache_dir
+    # Determine the cache directory using the environment variable or the default path
+    cache_dir = os.environ.get("BLACK_CACHE_DIR")
+    if cache_dir is None:  # Only get default cache dir if needed
+        cache_dir = user_cache_dir("black")
+    # Return Path object with version subdirectory
+    return Path(cache_dir) / __version__
 
 
 CACHE_DIR = get_cache_dir()
