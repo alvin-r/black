@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -586,12 +588,14 @@ def is_docstring(node: NL, mode: Mode) -> bool:
 
 def is_empty_tuple(node: LN) -> bool:
     """Return True if `node` holds an empty tuple."""
-    return (
-        node.type == syms.atom
-        and len(node.children) == 2
-        and node.children[0].type == token.LPAR
-        and node.children[1].type == token.RPAR
-    )
+    # Early return if possible, avoid computing entire condition if not needed
+    if len(node.children) != 2:
+        return False
+    if node.type != syms.atom:
+        return False
+    
+    first_child, second_child = node.children
+    return (first_child.type == token.LPAR and second_child.type == token.RPAR)
 
 
 def is_one_tuple(node: LN) -> bool:
