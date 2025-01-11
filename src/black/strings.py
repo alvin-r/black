@@ -95,14 +95,10 @@ def get_string_prefix(string: str) -> str:
         @string's prefix (e.g. '', 'r', 'f', or 'rf').
     """
     assert_is_leaf_string(string)
-
-    prefix = ""
-    prefix_idx = 0
-    while string[prefix_idx] in STRING_PREFIX_CHARS:
-        prefix += string[prefix_idx]
-        prefix_idx += 1
-
-    return prefix
+    
+    # Utilize the STRING_PREFIX_RE regex for fast prefix extraction
+    match = STRING_PREFIX_RE.match(string)
+    return match.group(1) if match else ""
 
 
 def assert_is_leaf_string(string: str) -> None:
@@ -332,7 +328,7 @@ def normalize_unicode_escape_sequences(leaf: Leaf) -> None:
             # \N{}
             return back_slashes + "N{" + groups["N"].upper() + "}"
 
-    leaf.value = re.sub(UNICODE_ESCAPE_RE, replace, text)
+    leaf.value = UNICODE_ESCAPE_RE.sub(replace, text)
 
 
 @lru_cache(maxsize=4096)
