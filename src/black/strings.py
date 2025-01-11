@@ -96,13 +96,14 @@ def get_string_prefix(string: str) -> str:
     """
     assert_is_leaf_string(string)
 
-    prefix = ""
-    prefix_idx = 0
-    while string[prefix_idx] in STRING_PREFIX_CHARS:
-        prefix += string[prefix_idx]
-        prefix_idx += 1
+    # Optimize by using a list comprehension to efficiently construct the prefix
+    prefix_end = 0
+    for i, char in enumerate(string):
+        if char not in STRING_PREFIX_CHARS:
+            break
+        prefix_end = i + 1
 
-    return prefix
+    return string[:prefix_end]
 
 
 def assert_is_leaf_string(string: str) -> None:
@@ -123,10 +124,12 @@ def assert_is_leaf_string(string: str) -> None:
     """
     dquote_idx = string.find('"')
     squote_idx = string.find("'")
-    if -1 in [dquote_idx, squote_idx]:
-        quote_idx = max(dquote_idx, squote_idx)
+
+    # Simplify logic to determine the index of quote character
+    if dquote_idx == -1 or (squote_idx != -1 and squote_idx < dquote_idx):
+        quote_idx = squote_idx
     else:
-        quote_idx = min(squote_idx, dquote_idx)
+        quote_idx = dquote_idx
 
     assert (
         0 <= quote_idx < len(string) - 1
@@ -136,7 +139,7 @@ def assert_is_leaf_string(string: str) -> None:
         '"',
     ), f"{string!r} is missing an ending quote character (' or \")."
     assert set(string[:quote_idx]).issubset(
-        set(STRING_PREFIX_CHARS)
+        STRING_PREFIX_CHARS
     ), f"{set(string[:quote_idx])} is NOT a subset of {set(STRING_PREFIX_CHARS)}."
 
 
