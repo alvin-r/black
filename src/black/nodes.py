@@ -6,6 +6,9 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+from blib2to3.pytree import Leaf
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -654,28 +657,22 @@ def is_one_sequence_between(
         return False
 
     depth = closing.bracket_depth + 1
-    for _opening_index, leaf in enumerate(leaves):
-        if leaf is opening:
-            break
-
-    else:
-        raise LookupError("Opening paren not found in `leaves`")
-
+    opening_found = False
     commas = 0
-    _opening_index += 1
-    for leaf in leaves[_opening_index:]:
+
+    for leaf in leaves:
+        if not opening_found:
+            if leaf is opening:
+                opening_found = True
+            continue
+        
         if leaf is closing:
             break
-
-        bracket_depth = leaf.bracket_depth
-        if bracket_depth == depth and leaf.type == token.COMMA:
+        
+        if leaf.bracket_depth == depth and leaf.type == token.COMMA:
             commas += 1
-            if leaf.parent and leaf.parent.type in {
-                syms.arglist,
-                syms.typedargslist,
-            }:
-                commas += 1
-                break
+            if leaf.parent and leaf.parent.type in {syms.arglist, syms.typedargslist}:
+                return False
 
     return commas < 2
 
