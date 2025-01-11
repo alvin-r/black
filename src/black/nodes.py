@@ -430,7 +430,10 @@ def whitespace(leaf: Leaf, *, complex_subscript: bool, mode: Mode) -> str:  # no
 def make_simple_prefix(nl_count: int, form_feed: bool, empty_line: str = "\n") -> str:
     """Generate a normalized prefix string."""
     if form_feed:
-        return (empty_line * (nl_count - 1)) + "\f" + empty_line
+        nl_count -= 1
+        if nl_count > 0:
+            return (empty_line * nl_count) + "\f" + empty_line
+        return "\f" + empty_line
     return empty_line * nl_count
 
 
