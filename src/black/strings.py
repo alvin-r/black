@@ -27,12 +27,13 @@ UNICODE_ESCAPE_RE: Final = re.compile(
 
 
 def sub_twice(regex: Pattern[str], replacement: str, original: str) -> str:
-    """Replace `regex` with `replacement` twice on `original`.
-
-    This is used by string normalization to perform replaces on
-    overlapping matches.
-    """
-    return regex.sub(replacement, regex.sub(replacement, original))
+    """Replace `regex` with `replacement` twice on `original`."""
+    result = original
+    for _ in range(2):
+        result, count = regex.subn(replacement, result)
+        if count == 0:
+            break
+    return result
 
 
 def has_triple_quotes(string: str) -> bool:
@@ -167,74 +168,54 @@ def _cached_compile(pattern: str) -> Pattern[str]:
 
 
 def normalize_string_quotes(s: str) -> str:
-    """Prefer double quotes but only if it doesn't cause more escaping.
-
-    Adds or removes backslashes as appropriate.
-    """
+    """Prefer double quotes but only if it doesn't cause more escaping."""
     value = s.lstrip(STRING_PREFIX_CHARS)
-    if value[:3] == '"""':
+    if value.startswith('"""'):
         return s
-
-    elif value[:3] == "'''":
-        orig_quote = "'''"
-        new_quote = '"""'
+    if value.startswith("'''"):
+        orig_quote, new_quote = "'''", '"""'
     elif value[0] == '"':
-        orig_quote = '"'
-        new_quote = "'"
+        orig_quote, new_quote = '"', "'"
     else:
-        orig_quote = "'"
-        new_quote = '"'
+        orig_quote, new_quote = "'", '"'
+
     first_quote_pos = s.find(orig_quote)
     assert first_quote_pos != -1, f"INTERNAL ERROR: Malformed string {s!r}"
-
     prefix = s[:first_quote_pos]
-    unescaped_new_quote = _cached_compile(rf"(([^\\]|^)(\\\\)*){new_quote}")
-    escaped_new_quote = _cached_compile(rf"([^\\]|^)\\((?:\\\\)*){new_quote}")
-    escaped_orig_quote = _cached_compile(rf"([^\\]|^)\\((?:\\\\)*){orig_quote}")
-    body = s[first_quote_pos + len(orig_quote) : -len(orig_quote)]
-    if "r" in prefix.casefold():
-        if unescaped_new_quote.search(body):
-            # There's at least one unescaped new_quote in this raw string
-            # so converting is impossible
-            return s
+    body = s[first_quote_pos + len(orig_quote): -len(orig_quote)]
 
-        # Do not introduce or remove backslashes in raw strings
+    if 'r' in prefix.casefold():
+        if new_quote in body:
+            return s
         new_body = body
     else:
-        # remove unnecessary escapes
+        escaped_new_quote = _cached_compile(rf"([^\\]|^)\\((?:\\\\)*){new_quote}")
+        escaped_orig_quote = _cached_compile(rf"([^\\]|^)\\((?:\\\\)*){orig_quote}")
         new_body = sub_twice(escaped_new_quote, rf"\1\2{new_quote}", body)
         if body != new_body:
-            # Consider the string without unnecessary escapes as the original
             body = new_body
             s = f"{prefix}{orig_quote}{body}{orig_quote}"
         new_body = sub_twice(escaped_orig_quote, rf"\1\2{orig_quote}", new_body)
+        unescaped_new_quote = _cached_compile(rf"(([^\\]|^)(\\\\)*){new_quote}")
         new_body = sub_twice(unescaped_new_quote, rf"\1\\{new_quote}", new_body)
 
-    if "f" in prefix.casefold():
-        matches = re.findall(
-            r"""
-            (?:(?<!\{)|^)\{  # start of the string or a non-{ followed by a single {
-                ([^{].*?)  # contents of the brackets except if begins with {{
-            \}(?:(?!\})|$)  # A } followed by end of the string or a non-}
-            """,
-            new_body,
-            re.VERBOSE,
-        )
+    if 'f' in prefix.casefold():
+        matches = _cached_compile(
+            r"""(?:(?<!\{)|^)\{([^{}][^}]*)\}(?:(?!\})|$)""").findall(new_body)
         for m in matches:
-            if "\\" in str(m):
-                # Do not introduce backslashes in interpolated expressions
+            if "\\" in m:
                 return s
 
-    if new_quote == '"""' and new_body[-1:] == '"':
-        # edge case:
+    if new_quote == '"""' and new_body.endswith('"'):
         new_body = new_body[:-1] + '\\"'
+
     orig_escape_count = body.count("\\")
     new_escape_count = new_body.count("\\")
     if new_escape_count > orig_escape_count:
-        return s  # Do not introduce more escaping
+        return s
 
     if new_escape_count == orig_escape_count and orig_quote == '"':
-        return s  # Prefer double quotes
+        return s
 
     return f"{prefix}{new_quote}{new_body}{new_quote}"
 
