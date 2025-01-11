@@ -2376,6 +2376,8 @@ class StringParser:
     def __init__(self) -> None:
         self._state = self.START
         self._unmatched_lpars = 0
+        # Pre-compute the default state lookup
+        self._default_state = {state: self._goto.get((state, self.DEFAULT_TOKEN), None) for state in set(pair[0] for pair in self._goto)}
 
     def parse(self, leaves: list[Leaf], string_idx: int) -> int:
         """
@@ -2408,43 +2410,31 @@ class StringParser:
         Returns:
             True iff @leaf is a part of the string's trailer.
         """
-        # We ignore empty LPAR or RPAR leaves.
         if is_empty_par(leaf):
             return True
 
         next_token = leaf.type
+        
         if next_token == token.LPAR:
             self._unmatched_lpars += 1
 
         current_state = self._state
 
-        # The LPAR parser state is a special case. We will return True until we
-        # find the matching RPAR token.
         if current_state == self.LPAR:
             if next_token == token.RPAR:
                 self._unmatched_lpars -= 1
                 if self._unmatched_lpars == 0:
                     self._state = self.RPAR
-        # Otherwise, we use a lookup table to determine the next state.
-        else:
-            # If the lookup table matches the current state to the next
-            # token, we use the lookup table.
-            if (current_state, next_token) in self._goto:
-                self._state = self._goto[current_state, next_token]
-            else:
-                # Otherwise, we check if a the current state was assigned a
-                # default.
-                if (current_state, self.DEFAULT_TOKEN) in self._goto:
-                    self._state = self._goto[current_state, self.DEFAULT_TOKEN]
-                # If no default has been assigned, then this parser has a logic
-                # error.
-                else:
-                    raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
+            return True
+        
+        # Check the next state using the lookup table directly
+        next_state = self._goto.get((current_state, next_token)) or self._default_state.get(current_state)
 
-            if self._state == self.DONE:
-                return False
+        if next_state is None:
+            raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
 
-        return True
+        self._state = next_state
+        return self._state != self.DONE
 
 
 def insert_str_child_factory(string_leaf: Leaf) -> Callable[[LN], None]:
