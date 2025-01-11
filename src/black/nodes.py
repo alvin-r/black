@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pytree import Leaf
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -533,12 +535,12 @@ def container_of(leaf: Leaf) -> LN:
 
 def first_leaf_of(node: LN) -> Optional[Leaf]:
     """Returns the first leaf of the node tree."""
-    if isinstance(node, Leaf):
-        return node
-    if node.children:
-        return first_leaf_of(node.children[0])
-    else:
-        return None
+    while not isinstance(node, Leaf):
+        if node.children:
+            node = node.children[0]
+        else:
+            return None
+    return node
 
 
 def is_arith_like(node: LN) -> bool:
