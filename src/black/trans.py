@@ -2389,7 +2389,6 @@ class StringParser:
             @string_idx + 1, if no string "trailer" exists.
         """
         assert leaves[string_idx].type == token.STRING
-
         idx = string_idx + 1
         while idx < len(leaves) and self._next_state(leaves[idx]):
             idx += 1
@@ -2408,40 +2407,26 @@ class StringParser:
         Returns:
             True iff @leaf is a part of the string's trailer.
         """
-        # We ignore empty LPAR or RPAR leaves.
         if is_empty_par(leaf):
             return True
 
         next_token = leaf.type
-        if next_token == token.LPAR:
-            self._unmatched_lpars += 1
-
         current_state = self._state
 
-        # The LPAR parser state is a special case. We will return True until we
-        # find the matching RPAR token.
-        if current_state == self.LPAR:
+        if current_state == 6:  # LPAR state
             if next_token == token.RPAR:
                 self._unmatched_lpars -= 1
                 if self._unmatched_lpars == 0:
-                    self._state = self.RPAR
-        # Otherwise, we use a lookup table to determine the next state.
+                    self._state = 7  # RPAR state
         else:
-            # If the lookup table matches the current state to the next
-            # token, we use the lookup table.
-            if (current_state, next_token) in self._goto:
-                self._state = self._goto[current_state, next_token]
-            else:
-                # Otherwise, we check if a the current state was assigned a
-                # default.
-                if (current_state, self.DEFAULT_TOKEN) in self._goto:
-                    self._state = self._goto[current_state, self.DEFAULT_TOKEN]
-                # If no default has been assigned, then this parser has a logic
-                # error.
-                else:
-                    raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
+            self._state = self.GOTO_LOOKUP.get(
+                (current_state, next_token), 
+                self.GOTO_LOOKUP.get((current_state, 20210605))  # DEFAULT_TOKEN
+            )
+            if self._state is None:
+                raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
 
-            if self._state == self.DONE:
+            if self._state == 8:  # DONE state
                 return False
 
         return True
