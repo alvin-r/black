@@ -191,9 +191,11 @@ class BracketTracker:
         To avoid splitting on the comma in this situation, increase the depth of
         tokens between `lambda` and `:`.
         """
+        # Directly check conditions to minimize nested structure
         if leaf.type == token.NAME and leaf.value == "lambda":
-            self.depth += 1
-            self._lambda_argument_depths.append(self.depth)
+            # Pre-compute depth and append operation to optimize performance
+            current_depth_incremented = self._lambda_argument_depths[-1] + 1 if self._lambda_argument_depths else 1
+            self._lambda_argument_depths.append(current_depth_incremented)
             return True
 
         return False
