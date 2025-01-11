@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -596,18 +598,24 @@ def is_empty_tuple(node: LN) -> bool:
 
 def is_one_tuple(node: LN) -> bool:
     """Return True if `node` holds a tuple with one element, with or without parens."""
-    if node.type == syms.atom:
-        gexp = unwrap_singleton_parenthesis(node)
-        if gexp is None or gexp.type != syms.testlist_gexp:
-            return False
+    node_type = node.type
+    children = node.children
+    
+    # Direct check for implicit tuple without needing unwrap function
+    if node_type in IMPLICIT_TUPLE:
+        if len(children) == 2 and children[1].type == token.COMMA:
+            return True
+        return False
+    
+    # Inline the unwrap_singleton_parenthesis logic for atomic nodes
+    if node_type == syms.atom and len(children) == 3:
+        lpar, wrapped, rpar = children
+        if lpar.type == token.LPAR and rpar.type == token.RPAR:
+            gexp = wrapped
+            if gexp.type == syms.testlist_gexp:
+                return len(gexp.children) == 2 and gexp.children[1].type == token.COMMA
 
-        return len(gexp.children) == 2 and gexp.children[1].type == token.COMMA
-
-    return (
-        node.type in IMPLICIT_TUPLE
-        and len(node.children) == 2
-        and node.children[1].type == token.COMMA
-    )
+    return False
 
 
 def is_tuple_containing_walrus(node: LN) -> bool:
