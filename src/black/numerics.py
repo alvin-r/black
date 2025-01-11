@@ -28,18 +28,15 @@ def format_scientific_notation(text: str) -> str:
 
 def format_complex_number(text: str) -> str:
     """Formats a complex string like `10j`"""
-    number = text[:-1]
-    suffix = text[-1]
-    return f"{format_float_or_int_string(number)}{suffix}"
+    return f"{format_float_or_int_string(text[:-1])}{text[-1]}"
 
 
 def format_float_or_int_string(text: str) -> str:
     """Formats a float string like "1.0"."""
-    if "." not in text:
-        return text
-
-    before, after = text.split(".")
-    return f"{before or 0}.{after or 0}"
+    if "." in text:
+        before, after = text.split(".")
+        return f"{before or 0}.{after or 0}"
+    return text
 
 
 def normalize_numeric_literal(leaf: Leaf) -> None:
