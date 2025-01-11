@@ -89,41 +89,33 @@ class BracketTracker:
         if leaf.type == token.COMMENT:
             return
 
-        if (
-            self.depth == 0
-            and leaf.type in CLOSING_BRACKETS
-            and (self.depth, leaf.type) not in self.bracket_match
-        ):
-            return
-
         self.maybe_decrement_after_for_loop_variable(leaf)
         self.maybe_decrement_after_lambda_arguments(leaf)
+
         if leaf.type in CLOSING_BRACKETS:
             self.depth -= 1
-            try:
-                opening_bracket = self.bracket_match.pop((self.depth, leaf.type))
-            except KeyError as e:
+            opening_bracket = self.bracket_match.pop((self.depth, leaf.type), None)
+            if not opening_bracket:
                 raise BracketMatchError(
                     "Unable to match a closing bracket to the following opening"
                     f" bracket: {leaf}"
-                ) from e
+                )
             leaf.opening_bracket = opening_bracket
             if not leaf.value:
                 self.invisible.append(leaf)
+
         leaf.bracket_depth = self.depth
         if self.depth == 0:
             delim = is_split_before_delimiter(leaf, self.previous)
-            if delim and self.previous is not None:
-                self.delimiters[id(self.previous)] = delim
-            else:
-                delim = is_split_after_delimiter(leaf)
-                if delim:
-                    self.delimiters[id(leaf)] = delim
+            if delim:
+                self.delimiters[id(self.previous if delim and self.previous else leaf)] = delim
+        
         if leaf.type in OPENING_BRACKETS:
             self.bracket_match[self.depth, BRACKET[leaf.type]] = leaf
             self.depth += 1
             if not leaf.value:
                 self.invisible.append(leaf)
+
         self.previous = leaf
         self.maybe_increment_lambda_arguments(leaf)
         self.maybe_increment_for_loop_variable(leaf)
@@ -168,21 +160,15 @@ class BracketTracker:
             self.depth += 1
             self._for_loop_depths.append(self.depth)
             return True
-
         return False
 
     def maybe_decrement_after_for_loop_variable(self, leaf: Leaf) -> bool:
         """See `maybe_increment_for_loop_variable` above for explanation."""
-        if (
-            self._for_loop_depths
-            and self._for_loop_depths[-1] == self.depth
-            and leaf.type == token.NAME
-            and leaf.value == "in"
-        ):
+        if (self._for_loop_depths and self._for_loop_depths[-1] == self.depth
+            and leaf.type == token.NAME and leaf.value == "in"):
             self.depth -= 1
             self._for_loop_depths.pop()
             return True
-
         return False
 
     def maybe_increment_lambda_arguments(self, leaf: Leaf) -> bool:
@@ -195,20 +181,15 @@ class BracketTracker:
             self.depth += 1
             self._lambda_argument_depths.append(self.depth)
             return True
-
         return False
 
     def maybe_decrement_after_lambda_arguments(self, leaf: Leaf) -> bool:
         """See `maybe_increment_lambda_arguments` above for explanation."""
-        if (
-            self._lambda_argument_depths
-            and self._lambda_argument_depths[-1] == self.depth
-            and leaf.type == token.COLON
-        ):
+        if (self._lambda_argument_depths and self._lambda_argument_depths[-1] == self.depth
+            and leaf.type == token.COLON):
             self.depth -= 1
             self._lambda_argument_depths.pop()
             return True
-
         return False
 
     def get_open_lsqb(self) -> Optional[Leaf]:
@@ -224,10 +205,7 @@ def is_split_after_delimiter(leaf: Leaf) -> Priority:
 
     Higher numbers are higher priority.
     """
-    if leaf.type == token.COMMA:
-        return COMMA_PRIORITY
-
-    return 0
+    return COMMA_PRIORITY if leaf.type == token.COMMA else 0
 
 
 def is_split_before_delimiter(leaf: Leaf, previous: Optional[Leaf] = None) -> Priority:
@@ -239,89 +217,51 @@ def is_split_before_delimiter(leaf: Leaf, previous: Optional[Leaf] = None) -> Pr
     Higher numbers are higher priority.
     """
     if is_vararg(leaf, within=VARARGS_PARENTS | UNPACKING_PARENTS):
-        # * and ** might also be MATH_OPERATORS but in this case they are not.
-        # Don't treat them as a delimiter.
         return 0
+    
+    parent = leaf.parent
+    if parent:
+        leaf_value = leaf.value
+        leaf_type = leaf.type
 
-    if (
-        leaf.type == token.DOT
-        and leaf.parent
-        and leaf.parent.type not in {syms.import_from, syms.dotted_name}
-        and (previous is None or previous.type in CLOSING_BRACKETS)
-    ):
-        return DOT_PRIORITY
+        if (leaf_type == token.DOT and parent.type not in {syms.import_from, syms.dotted_name}
+            and (not previous or previous.type in CLOSING_BRACKETS)):
+            return DOT_PRIORITY
 
-    if (
-        leaf.type in MATH_OPERATORS
-        and leaf.parent
-        and leaf.parent.type not in {syms.factor, syms.star_expr}
-    ):
-        return MATH_PRIORITIES[leaf.type]
+        if leaf_type in MATH_OPERATORS and parent.type not in {syms.factor, syms.star_expr}:
+            return MATH_PRIORITIES[leaf_type]
 
-    if leaf.type in COMPARATORS:
-        return COMPARATOR_PRIORITY
+        if leaf_type in COMPARATORS:
+            return COMPARATOR_PRIORITY
 
-    if (
-        leaf.type == token.STRING
-        and previous is not None
-        and previous.type == token.STRING
-    ):
-        return STRING_PRIORITY
+        if (leaf_type == token.STRING and previous and previous.type == token.STRING):
+            return STRING_PRIORITY
 
-    if leaf.type not in {token.NAME, token.ASYNC}:
-        return 0
+        if leaf_type not in {token.NAME, token.ASYNC}:
+            return 0
 
-    if (
-        leaf.value == "for"
-        and leaf.parent
-        and leaf.parent.type in {syms.comp_for, syms.old_comp_for}
-        or leaf.type == token.ASYNC
-    ):
-        if (
-            not isinstance(leaf.prev_sibling, Leaf)
-            or leaf.prev_sibling.value != "async"
-        ):
+        if leaf_value == "for" and parent.type in {syms.comp_for, syms.old_comp_for}:
             return COMPREHENSION_PRIORITY
 
-    if (
-        leaf.value == "if"
-        and leaf.parent
-        and leaf.parent.type in {syms.comp_if, syms.old_comp_if}
-    ):
-        return COMPREHENSION_PRIORITY
+        if leaf_value == "if" and parent.type in {syms.comp_if, syms.old_comp_if}:
+            return COMPREHENSION_PRIORITY
 
-    if leaf.value in {"if", "else"} and leaf.parent and leaf.parent.type == syms.test:
-        return TERNARY_PRIORITY
+        if leaf_value in {"if", "else"} and parent.type == syms.test:
+            return TERNARY_PRIORITY
 
-    if leaf.value == "is":
-        return COMPARATOR_PRIORITY
+        if leaf_value == "is":
+            return COMPARATOR_PRIORITY
 
-    if (
-        leaf.value == "in"
-        and leaf.parent
-        and leaf.parent.type in {syms.comp_op, syms.comparison}
-        and not (
-            previous is not None
-            and previous.type == token.NAME
-            and previous.value == "not"
-        )
-    ):
-        return COMPARATOR_PRIORITY
+        if (leaf_value == "in" and parent.type in {syms.comp_op, syms.comparison}
+            and not (previous and previous.type == token.NAME and previous.value == "not")):
+            return COMPARATOR_PRIORITY
 
-    if (
-        leaf.value == "not"
-        and leaf.parent
-        and leaf.parent.type == syms.comp_op
-        and not (
-            previous is not None
-            and previous.type == token.NAME
-            and previous.value == "is"
-        )
-    ):
-        return COMPARATOR_PRIORITY
+        if (leaf_value == "not" and parent.type == syms.comp_op
+            and not (previous and previous.type == token.NAME and previous.value == "is")):
+            return COMPARATOR_PRIORITY
 
-    if leaf.value in LOGIC_OPERATORS and leaf.parent:
-        return LOGIC_PRIORITY
+        if leaf_value in LOGIC_OPERATORS:
+            return LOGIC_PRIORITY
 
     return 0
 
