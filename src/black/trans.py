@@ -1337,11 +1337,10 @@ def iter_fexpr_spans(s: str) -> Iterator[tuple[int, int]]:
     Assumes the input string is a valid f-string, but will not crash if the input
     string is invalid.
     """
-    stack: list[int] = []  # our curly paren stack
+    stack: list[int] = []
     i = 0
     while i < len(s):
         if s[i] == "{":
-            # if we're in a string part of the f-string, ignore escaped curly braces
             if not stack and i + 1 < len(s) and s[i + 1] == "{":
                 i += 2
                 continue
@@ -1350,29 +1349,19 @@ def iter_fexpr_spans(s: str) -> Iterator[tuple[int, int]]:
             continue
 
         if s[i] == "}":
-            if not stack:
-                i += 1
-                continue
-            j = stack.pop()
-            # we've made it back out of the expression! yield the span
-            if not stack:
-                yield (j, i + 1)
+            if stack:
+                j = stack.pop()
+                if not stack:
+                    yield (j, i + 1)
             i += 1
             continue
 
-        # if we're in an expression part of the f-string, fast-forward through strings
-        # note that backslashes are not legal in the expression portion of f-strings
         if stack:
-            delim = None
             if s[i : i + 3] in ("'''", '"""'):
-                delim = s[i : i + 3]
+                i = _close_quote_idx(s, i + 3, s[i : i + 3])
+                continue
             elif s[i] in ("'", '"'):
-                delim = s[i]
-            if delim:
-                i += len(delim)
-                while i < len(s) and s[i : i + len(delim)] != delim:
-                    i += 1
-                i += len(delim)
+                i = _close_quote_idx(s, i + 1, s[i])
                 continue
         i += 1
 
@@ -2533,3 +2522,13 @@ def is_valid_index_factory(seq: Sequence[Any]) -> Callable[[int], bool]:
         return 0 <= idx < len(seq)
 
     return is_valid_index
+
+
+def _close_quote_idx(s: str, i: int, delim: str) -> int:
+    """Find the index where the given quote delimiter sequence closes."""
+    length = len(delim)
+    while i < len(s):
+        if s[i : i + length] == delim:
+            return i + length
+        i += 1
+    return len(s)
