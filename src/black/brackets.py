@@ -69,64 +69,42 @@ class BracketTracker:
     invisible: list[Leaf] = field(default_factory=list)
 
     def mark(self, leaf: Leaf) -> None:
-        """Mark `leaf` with bracket-related metadata. Keep track of delimiters.
-
-        All leaves receive an int `bracket_depth` field that stores how deep
-        within brackets a given leaf is. 0 means there are no enclosing brackets
-        that started on this line.
-
-        If a leaf is itself a closing bracket and there is a matching opening
-        bracket earlier, it receives an `opening_bracket` field with which it forms a
-        pair. This is a one-directional link to avoid reference cycles. Closing
-        bracket without opening happens on lines continued from previous
-        breaks, e.g. `) -> "ReturnType":` as part of a funcdef where we place
-        the return type annotation on its own line of the previous closing RPAR.
-
-        If a leaf is a delimiter (a token on which Black can split the line if
-        needed) and it's on depth 0, its `id()` is stored in the tracker's
-        `delimiters` field.
-        """
+        """Mark `leaf` with bracket-related metadata. Keep track of delimiters."""
         if leaf.type == token.COMMENT:
-            return
-
-        if (
-            self.depth == 0
-            and leaf.type in CLOSING_BRACKETS
-            and (self.depth, leaf.type) not in self.bracket_match
-        ):
             return
 
         self.maybe_decrement_after_for_loop_variable(leaf)
         self.maybe_decrement_after_lambda_arguments(leaf)
+        bracket_depth_change = 0
+
         if leaf.type in CLOSING_BRACKETS:
             self.depth -= 1
-            try:
+            if (self.depth, leaf.type) in self.bracket_match:
                 opening_bracket = self.bracket_match.pop((self.depth, leaf.type))
-            except KeyError as e:
-                raise BracketMatchError(
-                    "Unable to match a closing bracket to the following opening"
-                    f" bracket: {leaf}"
-                ) from e
-            leaf.opening_bracket = opening_bracket
-            if not leaf.value:
-                self.invisible.append(leaf)
-        leaf.bracket_depth = self.depth
-        if self.depth == 0:
-            delim = is_split_before_delimiter(leaf, self.previous)
-            if delim and self.previous is not None:
-                self.delimiters[id(self.previous)] = delim
-            else:
-                delim = is_split_after_delimiter(leaf)
-                if delim:
-                    self.delimiters[id(leaf)] = delim
-        if leaf.type in OPENING_BRACKETS:
+                leaf.opening_bracket = opening_bracket
+                if not leaf.value:
+                    self.invisible.append(leaf)
+            leaf.bracket_depth = self.depth
+            bracket_depth_change = -1
+        
+        elif leaf.type in OPENING_BRACKETS:
             self.bracket_match[self.depth, BRACKET[leaf.type]] = leaf
             self.depth += 1
             if not leaf.value:
                 self.invisible.append(leaf)
+            leaf.bracket_depth = self.depth
+            bracket_depth_change = 1
+
+        leaf.bracket_depth = self.depth
+
+        if self.depth == 0:
+            self._track_delimiters(leaf)
+
+        if bracket_depth_change == 0:
+            self.maybe_increment_lambda_arguments(leaf)
+            self.maybe_increment_for_loop_variable(leaf)
+
         self.previous = leaf
-        self.maybe_increment_lambda_arguments(leaf)
-        self.maybe_increment_for_loop_variable(leaf)
 
     def any_open_for_or_lambda(self) -> bool:
         """Return True if there is an open for or lambda expression on the line.
@@ -140,12 +118,8 @@ class BracketTracker:
         return bool(self.bracket_match)
 
     def max_delimiter_priority(self, exclude: Iterable[LeafID] = ()) -> Priority:
-        """Return the highest priority of a delimiter found on the line.
-
-        Values are consistent with what `is_split_*_delimiter()` return.
-        Raises ValueError on no delimiters.
-        """
-        return max(v for k, v in self.delimiters.items() if k not in exclude)
+        """Return the highest priority of a delimiter found on the line."""
+        return max((v for k, v in self.delimiters.items() if k not in exclude), default=0)
 
     def delimiter_count_with_priority(self, priority: Priority = 0) -> int:
         """Return the number of delimiters with the given `priority`.
@@ -214,6 +188,16 @@ class BracketTracker:
     def get_open_lsqb(self) -> Optional[Leaf]:
         """Return the most recent opening square bracket (if any)."""
         return self.bracket_match.get((self.depth - 1, token.RSQB))
+
+    def _track_delimiters(self, leaf: Leaf) -> None:
+        """Track delimiters of the leaf at depth 0."""
+        delimiter_priority_before = is_split_before_delimiter(leaf, self.previous)
+        if delimiter_priority_before and self.previous is not None:
+            self.delimiters[id(self.previous)] = delimiter_priority_before
+        else:
+            delimiter_priority_after = is_split_after_delimiter(leaf)
+            if delimiter_priority_after:
+                self.delimiters[id(leaf)] = delimiter_priority_after
 
 
 def is_split_after_delimiter(leaf: Leaf) -> Priority:
@@ -327,31 +311,23 @@ def is_split_before_delimiter(leaf: Leaf, previous: Optional[Leaf] = None) -> Pr
 
 
 def max_delimiter_priority_in_atom(node: LN) -> Priority:
-    """Return maximum delimiter priority inside `node`.
-
-    This is specific to atoms with contents contained in a pair of parentheses.
-    If `node` isn't an atom or there are no enclosing parentheses, returns 0.
-    """
+    """Return maximum delimiter priority inside `node`."""
     if node.type != syms.atom:
         return 0
 
-    first = node.children[0]
-    last = node.children[-1]
+    first, last = node.children[0], node.children[-1]
     if not (first.type == token.LPAR and last.type == token.RPAR):
         return 0
 
     bt = BracketTracker()
-    for c in node.children[1:-1]:
-        if isinstance(c, Leaf):
-            bt.mark(c)
+    for child in node.children[1:-1]:
+        if isinstance(child, Leaf):
+            bt.mark(child)
         else:
-            for leaf in c.leaves():
+            for leaf in child.leaves():
                 bt.mark(leaf)
-    try:
-        return bt.max_delimiter_priority()
-
-    except ValueError:
-        return 0
+    
+    return bt.max_delimiter_priority(default=0)
 
 
 def get_leaves_inside_matching_brackets(leaves: Sequence[Leaf]) -> set[LeafID]:
