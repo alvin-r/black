@@ -21,21 +21,23 @@ from blib2to3.pgen2.token import ASYNC, NEWLINE
 
 def parse_line_ranges(line_ranges: Sequence[str]) -> list[tuple[int, int]]:
     lines: list[tuple[int, int]] = []
+    
+    # Pre-compile the expected error messages for consistency and reuse
+    incorrect_format_msg = "Incorrect --line-ranges format, expect 'START-END', found"
+    incorrect_value_msg = "Incorrect --line-ranges value, expect integer ranges, found"
+
     for lines_str in line_ranges:
-        parts = lines_str.split("-")
-        if len(parts) != 2:
-            raise ValueError(
-                "Incorrect --line-ranges format, expect 'START-END', found"
-                f" {lines_str!r}"
-            )
         try:
-            start = int(parts[0])
-            end = int(parts[1])
+            # Unpack the split directly into start and end, expecting exactly two parts
+            start_str, end_str = lines_str.split("-")
+            start = int(start_str)
+            end = int(end_str)
         except ValueError:
-            raise ValueError(
-                "Incorrect --line-ranges value, expect integer ranges, found"
-                f" {lines_str!r}"
-            ) from None
+            # Determine which error message to raise based on character presence
+            if "-" not in lines_str or lines_str.count("-") != 1:
+                raise ValueError(f"{incorrect_format_msg} {lines_str!r}")
+            else:
+                raise ValueError(f"{incorrect_value_msg} {lines_str!r}") from None
         else:
             lines.append((start, end))
     return lines
