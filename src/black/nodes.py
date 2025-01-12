@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pytree import Leaf
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -1040,12 +1042,11 @@ def first_leaf(node: LN) -> Optional[Leaf]:
 
 def last_leaf(node: LN) -> Optional[Leaf]:
     """Returns the last leaf of the ancestor node."""
-    if isinstance(node, Leaf):
-        return node
-    elif not node.children:
-        return None
-    else:
-        return last_leaf(node.children[-1])
+    while not isinstance(node, Leaf):
+        if not node.children:
+            return None
+        node = node.children[-1]
+    return node
 
 
 def furthest_ancestor_with_last_leaf(leaf: Leaf) -> LN:
