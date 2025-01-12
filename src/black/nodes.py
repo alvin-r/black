@@ -6,6 +6,9 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+from blib2to3.pytree import Leaf, Node
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -841,18 +844,24 @@ def is_stub_suite(node: Node) -> bool:
 
 def is_stub_body(node: LN) -> bool:
     """Return True if `node` is a simple statement containing an ellipsis."""
+    # Early return if node is not a Node or doesn't have the right type
     if not isinstance(node, Node) or node.type != syms.simple_stmt:
         return False
 
+    # Check if node has exactly two children, if not, return False
     if len(node.children) != 2:
         return False
 
     child = node.children[0]
+
+    # Check prefix, type, and children conditions in a single line
     return (
-        not child.prefix.strip()
+        child.prefix.isspace() == False  # Check if prefix is not just spaces (optimized)
         and child.type == syms.atom
         and len(child.children) == 3
-        and all(leaf == Leaf(token.DOT, ".") for leaf in child.children)
+        and child.children[0] == Leaf(token.DOT, ".")
+        and child.children[1] == Leaf(token.DOT, ".")
+        and child.children[2] == Leaf(token.DOT, ".")  # Unroll the loop for checking "." 
     )
 
 
