@@ -6,6 +6,10 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from black.strings import has_triple_quotes
+from blib2to3.pgen2 import token
+from blib2to3.pytree import Leaf, Node
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -787,7 +791,10 @@ def is_fstring(node: Node) -> bool:
 
 def fstring_to_string(node: Node) -> Leaf:
     """Converts an fstring node back to a string node."""
-    string_without_prefix = str(node)[len(node.prefix) :]
+    # Precompute node-to-string transformation
+    node_repr = str(node)
+    prefix_length = len(node.prefix)
+    string_without_prefix = node_repr[prefix_length:]
     string_leaf = Leaf(token.STRING, string_without_prefix, prefix=node.prefix)
     string_leaf.lineno = node.get_lineno() or 0
     return string_leaf
@@ -795,14 +802,15 @@ def fstring_to_string(node: Node) -> Leaf:
 
 def is_multiline_string(node: LN) -> bool:
     """Return True if `leaf` is a multiline string that actually spans many lines."""
-    if isinstance(node, Node) and is_fstring(node):
-        leaf = fstring_to_string(node)
-    elif isinstance(node, Leaf):
-        leaf = node
+    if isinstance(node, Leaf):
+        leaf_value = node.value
+    elif isinstance(node, Node) and is_fstring(node):
+        leaf_value = fstring_to_string(node).value
     else:
         return False
 
-    return has_triple_quotes(leaf.value) and "\n" in leaf.value
+    # Only call has_triple_quotes if there's a newline in the value
+    return "\n" in leaf_value and has_triple_quotes(leaf_value)
 
 
 def is_parent_function_or_class(node: Node) -> bool:
