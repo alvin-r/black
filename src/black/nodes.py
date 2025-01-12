@@ -6,6 +6,10 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from black.nodes import syms
+from blib2to3.pgen2 import token
+from blib2to3.pytree import Leaf
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -920,11 +924,9 @@ def is_async_stmt_or_funcdef(leaf: Leaf) -> bool:
     Note that `async def` can be either an `async_stmt` or `async_funcdef`,
     the latter is used when it has decorators.
     """
-    return bool(
-        leaf.type == token.ASYNC
-        and leaf.parent
-        and leaf.parent.type in {syms.async_stmt, syms.async_funcdef}
-    )
+    if leaf.type == token.ASYNC and leaf.parent:
+        return leaf.parent.type in {syms.async_stmt, syms.async_funcdef}
+    return False
 
 
 def is_type_comment(leaf: Leaf) -> bool:
