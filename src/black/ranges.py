@@ -512,11 +512,20 @@ def _find_lines_mapping_index(
     lines_mappings: Sequence[_LinesMapping],
     start_index: int,
 ) -> int:
-    """Returns the original index of the lines mappings for the original line."""
-    index = start_index
-    while index < len(lines_mappings):
-        mapping = lines_mappings[index]
+    """Returns the original index of the lines mappings for the original line
+    optimized by using binary search for performance improvement.
+    """
+    # Using binary search for faster lookup
+    left, right = start_index, len(lines_mappings) - 1
+    while left <= right:
+        mid = (left + right) // 2
+        mapping = lines_mappings[mid]
+        
         if mapping.original_start <= original_line <= mapping.original_end:
-            return index
-        index += 1
-    return index
+            return mid
+        elif original_line < mapping.original_start:
+            right = mid - 1
+        else:
+            left = mid + 1
+    
+    return len(lines_mappings)  # Meaning original line was not within any mapping range
