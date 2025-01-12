@@ -6,6 +6,9 @@ import sys
 from collections.abc import Iterator
 from typing import Final, Generic, Literal, Optional, TypeVar, Union
 
+from blib2to3.pgen2 import token
+from blib2to3.pytree import Leaf, Node
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -682,8 +685,12 @@ def is_one_sequence_between(
 
 def is_walrus_assignment(node: LN) -> bool:
     """Return True iff `node` is of the shape ( test := test )"""
-    inner = unwrap_singleton_parenthesis(node)
-    return inner is not None and inner.type == syms.namedexpr_test
+    if len(node.children) != 3:
+        return False
+    lpar, inner, rpar = node.children
+    return (lpar.type == token.LPAR and 
+            rpar.type == token.RPAR and 
+            inner.type == syms.namedexpr_test)
 
 
 def is_simple_decorator_trailer(node: LN, last: bool = False) -> bool:
@@ -976,10 +983,9 @@ def unwrap_singleton_parenthesis(node: LN) -> Optional[LN]:
         return None
 
     lpar, wrapped, rpar = node.children
-    if not (lpar.type == token.LPAR and rpar.type == token.RPAR):
-        return None
-
-    return wrapped
+    if lpar.type == token.LPAR and rpar.type == token.RPAR:
+        return wrapped
+    return None
 
 
 def ensure_visible(leaf: Leaf) -> None:
