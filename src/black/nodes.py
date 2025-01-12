@@ -4,7 +4,10 @@ blib2to3 Node/Leaf transformation-related utility functions.
 
 import sys
 from collections.abc import Iterator
-from typing import Final, Generic, Literal, Optional, TypeVar, Union
+from typing import Final, Generic, Literal, Optional, TypeGuard, TypeVar, Union
+
+from blib2to3.pgen2 import token
+from blib2to3.pytree import NL, Leaf, Node
 
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
@@ -738,23 +741,18 @@ def is_simple_decorator_expression(node: LN) -> bool:
 
 def is_yield(node: LN) -> bool:
     """Return True if `node` holds a `yield` or `yield from` expression."""
+    # Fast failure check: Node type or single child leaf
     if node.type == syms.yield_expr:
         return True
 
-    if is_name_token(node) and node.value == "yield":
-        return True
-
-    if node.type != syms.atom:
-        return False
-
-    if len(node.children) != 3:
-        return False
-
-    lpar, expr, rpar = node.children
-    if lpar.type == token.LPAR and rpar.type == token.RPAR:
-        return is_yield(expr)
-
-    return False
+    if node.type == syms.atom:
+        children = node.children
+        if len(children) == 3:
+            lpar, expr, rpar = children
+            if lpar.type == token.LPAR and rpar.type == token.RPAR:
+                return is_yield(expr)
+    
+    return is_name_token(node) and node.value == "yield"
 
 
 def is_vararg(leaf: Leaf, within: set[NodeType]) -> bool:
