@@ -69,20 +69,7 @@ def jupyter_dependencies_are_installed(*, warn: bool) -> bool:
 def validate_cell(src: str, mode: Mode) -> None:
     """Check that cell does not already contain TransformerManager transformations,
     or non-Python cell magics, which might cause tokenizer_rt to break because of
-    indentations.
-
-    If a cell contains ``!ls``, then it'll be transformed to
-    ``get_ipython().system('ls')``. However, if the cell originally contained
-    ``get_ipython().system('ls')``, then it would get transformed in the same way:
-
-        >>> TransformerManager().transform_cell("get_ipython().system('ls')")
-        "get_ipython().system('ls')\n"
-        >>> TransformerManager().transform_cell("!ls")
-        "get_ipython().system('ls')\n"
-
-    Due to the impossibility of safely roundtripping in such situations, cells
-    containing transformed magics will be ignored.
-    """
+    indentations."""
     if any(transformed_magic in src for transformed_magic in TRANSFORMED_MAGICS):
         raise NothingChanged
 
@@ -95,21 +82,7 @@ def validate_cell(src: str, mode: Mode) -> None:
 
 
 def remove_trailing_semicolon(src: str) -> tuple[str, bool]:
-    """Remove trailing semicolon from Jupyter notebook cell.
-
-    For example,
-
-        fig, ax = plt.subplots()
-        ax.plot(x_data, y_data);  # plot data
-
-    would become
-
-        fig, ax = plt.subplots()
-        ax.plot(x_data, y_data)  # plot data
-
-    Mirrors the logic in `quiet` from `IPython.core.displayhook`, but uses
-    ``tokenize_rt`` so that round-tripping works fine.
-    """
+    """Remove trailing semicolon from Jupyter notebook cell."""
     from tokenize_rt import reversed_enumerate, src_to_tokens, tokens_to_src
 
     tokens = src_to_tokens(src)
@@ -127,11 +100,7 @@ def remove_trailing_semicolon(src: str) -> tuple[str, bool]:
 
 
 def put_trailing_semicolon_back(src: str, has_trailing_semicolon: bool) -> str:
-    """Put trailing semicolon back if cell originally had it.
-
-    Mirrors the logic in `quiet` from `IPython.core.displayhook`, but uses
-    ``tokenize_rt`` so that round-tripping works fine.
-    """
+    """Put trailing semicolon back if cell originally had it."""
     if not has_trailing_semicolon:
         return src
     from tokenize_rt import reversed_enumerate, src_to_tokens, tokens_to_src
@@ -142,29 +111,11 @@ def put_trailing_semicolon_back(src: str, has_trailing_semicolon: bool) -> str:
             continue
         tokens[idx] = token._replace(src=token.src + ";")
         break
-    else:  # pragma: nocover
-        raise AssertionError(
-            "INTERNAL ERROR: Was not able to reinstate trailing semicolon. "
-            "Please report a bug on https://github.com/psf/black/issues.  "
-        ) from None
     return str(tokens_to_src(tokens))
 
 
 def mask_cell(src: str) -> tuple[str, list[Replacement]]:
-    """Mask IPython magics so content becomes parseable Python code.
-
-    For example,
-
-        %matplotlib inline
-        'foo'
-
-    becomes
-
-        "25716f358c32750e"
-        'foo'
-
-    The replacements are returned, along with the transformed code.
-    """
+    """Mask IPython magics so content becomes parseable Python code."""
     replacements: list[Replacement] = []
     try:
         ast.parse(src)
@@ -178,17 +129,15 @@ def mask_cell(src: str) -> tuple[str, list[Replacement]]:
     from IPython.core.inputtransformer2 import TransformerManager
 
     transformer_manager = TransformerManager()
-    # A side effect of the following transformation is that it also removes any
-    # empty lines at the beginning of the cell.
+    # Apply transformation and handle replacements
     transformed = transformer_manager.transform_cell(src)
     transformed, cell_magic_replacements = replace_cell_magics(transformed)
-    replacements += cell_magic_replacements
-    transformed = transformer_manager.transform_cell(transformed)
-    transformed, magic_replacements = replace_magics(transformed)
+    replacements.extend(cell_magic_replacements)
+    transformed, magic_replacements = replace_magics(transformer_manager.transform_cell(transformed))
     if len(transformed.strip().splitlines()) != len(src.strip().splitlines()):
         # Multi-line magic, not supported.
         raise NothingChanged
-    replacements += magic_replacements
+    replacements.extend(magic_replacements)
     return transformed, replacements
 
 
@@ -291,18 +240,7 @@ def replace_magics(src: str) -> tuple[str, list[Replacement]]:
 
 
 def unmask_cell(src: str, replacements: list[Replacement]) -> str:
-    """Remove replacements from cell.
-
-    For example
-
-        "9b20"
-        foo = bar
-
-    becomes
-
-        %%time
-        foo = bar
-    """
+    """Remove replacements from cell."""
     for replacement in replacements:
         src = src.replace(replacement.mask, replacement.src)
     return src

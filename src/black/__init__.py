@@ -60,7 +60,7 @@ from black.handle_ipynb_magics import (
 )
 from black.linegen import LN, LineGenerator, transform_line
 from black.lines import EmptyLineTracker, LinesBlock
-from black.mode import FUTURE_FLAG_TO_FEATURE, VERSION_TO_FEATURES, Feature
+from black.mode import Mode, FUTURE_FLAG_TO_FEATURE, VERSION_TO_FEATURES, Feature
 from black.mode import Mode as Mode  # re-exported
 from black.mode import Preview, TargetVersion, supports_feature
 from black.nodes import STARS, is_number_token, is_simple_decorator_expression, syms
@@ -1050,12 +1050,7 @@ def check_stability_and_equivalence(
     mode: Mode,
     lines: Collection[tuple[int, int]] = (),
 ) -> None:
-    """Perform stability and equivalence checks.
-
-    Raise AssertionError if source and destination contents are not
-    equivalent, or if a second pass of the formatter would format the
-    content differently.
-    """
+    """Perform stability and equivalence checks."""
     assert_equivalent(src_contents, dst_contents)
     assert_stable(src_contents, dst_contents, mode=mode, lines=lines)
 
@@ -1089,37 +1084,18 @@ def format_file_contents(
 
 
 def format_cell(src: str, *, fast: bool, mode: Mode) -> str:
-    """Format code in given cell of Jupyter notebook.
-
-    General idea is:
-
-      - if cell has trailing semicolon, remove it;
-      - if cell has IPython magics, mask them;
-      - format cell;
-      - reinstate IPython magics;
-      - reinstate trailing semicolon (if originally present);
-      - strip trailing newlines.
-
-    Cells with syntax errors will not be processed, as they
-    could potentially be automagics or multi-line magics, which
-    are currently not supported.
-    """
+    """Format code in given cell of Jupyter notebook."""
     validate_cell(src, mode)
-    src_without_trailing_semicolon, has_trailing_semicolon = remove_trailing_semicolon(
-        src
-    )
+    src_without_trailing_semicolon, has_trailing_semicolon = remove_trailing_semicolon(src)
     try:
         masked_src, replacements = mask_cell(src_without_trailing_semicolon)
     except SyntaxError:
         raise NothingChanged from None
-    masked_dst = format_str(masked_src, mode=mode)
+    masked_dst = _format_str_once(masked_src, mode=mode)
     if not fast:
         check_stability_and_equivalence(masked_src, masked_dst, mode=mode)
     dst_without_trailing_semicolon = unmask_cell(masked_dst, replacements)
-    dst = put_trailing_semicolon_back(
-        dst_without_trailing_semicolon, has_trailing_semicolon
-    )
-    dst = dst.rstrip("\n")
+    dst = put_trailing_semicolon_back(dst_without_trailing_semicolon, has_trailing_semicolon).rstrip("\n")
     if dst == src:
         raise NothingChanged from None
     return dst
@@ -1172,46 +1148,14 @@ def format_ipynb_string(src_contents: str, *, fast: bool, mode: Mode) -> FileCon
 def format_str(
     src_contents: str, *, mode: Mode, lines: Collection[tuple[int, int]] = ()
 ) -> str:
-    """Reformat a string and return new contents.
-
-    `mode` determines formatting options, such as how many characters per line are
-    allowed.  Example:
-
-    >>> import black
-    >>> print(black.format_str("def f(arg:str='')->None:...", mode=black.Mode()))
-    def f(arg: str = "") -> None:
-        ...
-
-    A more complex example:
-
-    >>> print(
-    ...   black.format_str(
-    ...     "def f(arg:str='')->None: hey",
-    ...     mode=black.Mode(
-    ...       target_versions={black.TargetVersion.PY36},
-    ...       line_length=10,
-    ...       string_normalization=False,
-    ...       is_pyi=False,
-    ...     ),
-    ...   ),
-    ... )
-    def f(
-        arg: str = '',
-    ) -> None:
-        hey
-
-    """
+    """Reformat a string and return new contents."""
     if lines:
         lines = sanitized_lines(lines, src_contents)
         if not lines:
             return src_contents  # Nothing to format
     dst_contents = _format_str_once(src_contents, mode=mode, lines=lines)
-    # Forced second pass to work around optional trailing commas (becoming
-    # forced trailing commas on pass 2) interacting differently with optional
-    # parentheses.  Admittedly ugly.
-    if src_contents != dst_contents:
-        if lines:
-            lines = adjusted_lines(lines, src_contents, dst_contents)
+    if src_contents != dst_contents and lines:
+        lines = adjusted_lines(lines, src_contents, dst_contents)
         return _format_str_once(dst_contents, mode=mode, lines=lines)
     return dst_contents
 
