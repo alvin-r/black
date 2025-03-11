@@ -422,8 +422,7 @@ class CustomSplitMapMixin:
         Returns:
             True iff @string is associated with a set of custom splits.
         """
-        key = self._get_key(string)
-        return key in self._CUSTOM_SPLIT_MAP
+        return (id(string), string) in self._CUSTOM_SPLIT_MAP
 
 
 class StringMerger(StringTransformer, CustomSplitMapMixin):
