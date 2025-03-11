@@ -34,21 +34,26 @@ def get_grammars(target_versions: set[TargetVersion]) -> list[Grammar]:
         ]
 
     grammars = []
-    # If we have to parse both, try to parse async as a keyword first
-    if not supports_feature(
-        target_versions, Feature.ASYNC_IDENTIFIERS
-    ) and not supports_feature(target_versions, Feature.PATTERN_MATCHING):
+    add_async_keywords_grammar = add_grammar = True
+
+    if supports_feature(target_versions, Feature.ASYNC_IDENTIFIERS):
+        add_async_keywords_grammar = False
+    
+    if supports_feature(target_versions, Feature.ASYNC_KEYWORDS):
+        add_grammar = False
+    
+    if add_async_keywords_grammar and not supports_feature(target_versions, Feature.PATTERN_MATCHING):
         # Python 3.7-3.9
         grammars.append(pygram.python_grammar_async_keywords)
-    if not supports_feature(target_versions, Feature.ASYNC_KEYWORDS):
+    
+    if add_grammar:
         # Python 3.0-3.6
         grammars.append(pygram.python_grammar)
+    
     if any(Feature.PATTERN_MATCHING in VERSION_TO_FEATURES[v] for v in target_versions):
         # Python 3.10+
         grammars.append(pygram.python_grammar_soft_keywords)
 
-    # At least one of the above branches must have been taken, because every Python
-    # version has exactly one of the two 'ASYNC_*' flags
     return grammars
 
 
