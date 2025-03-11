@@ -170,17 +170,19 @@ def handle_is_simple_look_up_prev(line: Line, index: int, disallowed: set[int]) 
     to determine the bracket or parenthesis belong to the single expression.
     """
     contains_disallowed = False
-    chain = []
+    last_leaf_type = None
 
-    while 0 <= index < len(line.leaves):
+    while index >= 0:
         current = line.leaves[index]
-        chain.append(current)
-        if not contains_disallowed and current.type in disallowed:
-            contains_disallowed = True
-        if not is_expression_chained(chain):
-            return not contains_disallowed
-
         index -= 1
+        if last_leaf_type is not None:
+            if not is_expression_chained(last_leaf_type, current.type):
+                return not contains_disallowed
+        
+        if current.type in disallowed:
+            contains_disallowed = True
+
+        last_leaf_type = current.type
 
     return True
 
@@ -216,20 +218,13 @@ def is_expression_chained(chained_leaves: list[Leaf]) -> bool:
     Function to determine if the variable is a chained call.
     (e.g., foo.lookup, foo().lookup, (foo.lookup())) will be recognized as chained call)
     """
-    if len(chained_leaves) < 2:
-        return True
-
-    current_leaf = chained_leaves[-1]
-    past_leaf = chained_leaves[-2]
-
-    if past_leaf.type == token.NAME:
-        return current_leaf.type in {token.DOT}
-    elif past_leaf.type in {token.RPAR, token.RSQB}:
-        return current_leaf.type in {token.RSQB, token.RPAR}
-    elif past_leaf.type in {token.LPAR, token.LSQB}:
-        return current_leaf.type in {token.NAME, token.LPAR, token.LSQB}
-    else:
-        return False
+    if past_leaf_type == token.NAME:
+        return current_leaf_type == token.DOT
+    elif past_leaf_type in {token.RPAR, token.RSQB}:
+        return current_leaf_type in {token.RSQB, token.RPAR}
+    elif past_leaf_type in {token.LPAR, token.LSQB}:
+        return current_leaf_type in {token.NAME, token.LPAR, token.LSQB}
+    return False
 
 
 class StringTransformer(ABC):
