@@ -193,20 +193,23 @@ def handle_is_simple_lookup_forward(
     This function is simplified to keep consistent with the prior logic and the forward
     case are more straightforward and do not need to care about chained expressions.
     """
-    while 0 <= index < len(line.leaves):
+    len_leaves = len(line.leaves)
+    increment = index + 1
+
+    while increment <= len_leaves:
         current = line.leaves[index]
+        
         if current.type in disallowed:
             return False
-        if current.type not in {token.NAME, token.DOT} or (
-            current.type == token.NAME and current.value == "for"
-        ):
-            # If the current token isn't disallowed, we'll assume this is simple as
-            # only the disallowed tokens are semantically attached to this lookup
-            # expression we're checking. Also, stop early if we hit the 'for' bit
-            # of a comprehension.
+        
+        if current.type == token.NAME:
+            if current.value == "for":
+                return True
+        elif current.type != token.DOT:
             return True
 
         index += 1
+        increment += 1
 
     return True
 
