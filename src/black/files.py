@@ -13,6 +13,8 @@ from packaging.version import InvalidVersion, Version
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPatternError
 
+from black.mode import TargetVersion
+
 if sys.version_info >= (3, 11):
     try:
         import tomllib
@@ -145,18 +147,15 @@ def infer_target_version(
 
     If the target version cannot be inferred, returns None.
     """
-    project_metadata = pyproject_toml.get("project", {})
-    requires_python = project_metadata.get("requires-python", None)
-    if requires_python is not None:
-        try:
-            return parse_req_python_version(requires_python)
-        except InvalidVersion:
-            pass
-        try:
-            return parse_req_python_specifier(requires_python)
-        except (InvalidSpecifier, InvalidVersion):
-            pass
-
+    requires_python = pyproject_toml.get("project", {}).get("requires-python")
+    if requires_python:
+        for parser in [parse_req_python_version, parse_req_python_specifier]:
+            try:
+                result = parser(requires_python)
+                if result:
+                    return result
+            except (InvalidSpecifier, InvalidVersion):
+                continue
     return None
 
 
@@ -167,12 +166,12 @@ def parse_req_python_version(requires_python: str) -> Optional[list[TargetVersio
     If the parsed version cannot be mapped to a valid TargetVersion, returns None.
     """
     version = Version(requires_python)
-    if version.release[0] != 3:
-        return None
-    try:
-        return [TargetVersion(version.release[1])]
-    except (IndexError, ValueError):
-        return None
+    if version.major == 3:
+        try:
+            return [TargetVersion(version.minor)]
+        except (IndexError, ValueError):
+            return None
+    return None
 
 
 def parse_req_python_specifier(requires_python: str) -> Optional[list[TargetVersion]]:
@@ -186,10 +185,9 @@ def parse_req_python_specifier(requires_python: str) -> Optional[list[TargetVers
         return None
 
     target_version_map = {f"3.{v.value}": v for v in TargetVersion}
-    compatible_versions: list[str] = list(specifier_set.filter(target_version_map))
-    if compatible_versions:
-        return [target_version_map[v] for v in compatible_versions]
-    return None
+    compatible_versions = [target_version_map[str(v)] for v in specifier_set.filter(target_version_map) if str(v) in target_version_map]
+    
+    return compatible_versions if compatible_versions else None
 
 
 def strip_specifier_set(specifier_set: SpecifierSet) -> SpecifierSet:
