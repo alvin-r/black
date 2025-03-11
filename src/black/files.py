@@ -7,6 +7,8 @@ from pathlib import Path
 from re import Pattern
 from typing import TYPE_CHECKING, Any, Optional, Union
 
+import colorama
+from colorama.initialise import wrap_stream as colorama_wrap_stream
 from mypy_extensions import mypyc_attr
 from packaging.specifiers import InvalidSpecifier, Specifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
@@ -417,10 +419,5 @@ def wrap_stream_for_windows(
     to be wrapped for a Windows environment and will accordingly either return
     an `AnsiToWin32` wrapper or the original stream.
     """
-    try:
-        from colorama.initialise import wrap_stream
-    except ImportError:
-        return f
-    else:
-        # Set `strip=False` to avoid needing to modify test_express_diff_with_color.
-        return wrap_stream(f, convert=None, strip=False, autoreset=False, wrap=True)
+    # colorama_wrap_stream is imported at the top for faster access, no need to import each time.
+    return colorama_wrap_stream(f, convert=None, strip=False, autoreset=False, wrap=True)
