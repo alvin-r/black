@@ -95,18 +95,28 @@ def diff(a: str, b: str, a_name: str, b_name: str) -> str:
 
 def color_diff(contents: str) -> str:
     """Inject the ANSI color codes to the diff."""
+    # Precompile the ANSI color codes for reuse
+    bold_code = "\033[1m"
+    reset_code = "\033[0m"
+    cyan_code = "\033[36m"
+    green_code = "\033[32m"
+    red_code = "\033[31m"
+    
+    # Split the contents into lines all at once
     lines = contents.split("\n")
-    for i, line in enumerate(lines):
-        if line.startswith("+++") or line.startswith("---"):
-            line = "\033[1m" + line + "\033[0m"  # bold, reset
-        elif line.startswith("@@"):
-            line = "\033[36m" + line + "\033[0m"  # cyan, reset
-        elif line.startswith("+"):
-            line = "\033[32m" + line + "\033[0m"  # green, reset
-        elif line.startswith("-"):
-            line = "\033[31m" + line + "\033[0m"  # red, reset
-        lines[i] = line
-    return "\n".join(lines)
+    
+    # Use list comprehension to rebuild the lines with color codes as needed
+    colored_lines = [
+        f"{bold_code}{line}{reset_code}" if line.startswith("+++") or line.startswith("---") else
+        f"{cyan_code}{line}{reset_code}" if line.startswith("@@") else
+        f"{green_code}{line}{reset_code}" if line.startswith("+") else
+        f"{red_code}{line}{reset_code}" if line.startswith("-") else
+        line
+        for line in lines
+    ]
+    
+    # Join the lines back together at the end
+    return "\n".join(colored_lines)
 
 
 @mypyc_attr(patchable=True)
