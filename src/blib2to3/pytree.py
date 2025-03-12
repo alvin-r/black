@@ -482,15 +482,17 @@ def convert(gr: Grammar, raw_node: RawNode) -> NL:
     strictly bottom-up.
     """
     type, value, context, children = raw_node
-    if children or type in gr.number2symbol:
-        # If there's exactly one child, return that child instead of
-        # creating a new node.
-        assert children is not None
+
+    # If children exist or type is in number2symbol, process further
+    if children:
         if len(children) == 1:
             return children[0]
         return Node(type, children, context=context)
-    else:
-        return Leaf(type, value or "", context=context)
+
+    if type in gr.number2symbol:
+        return Node(type, children or [], context=context)
+
+    return Leaf(type, value or "", context=context)
 
 
 _Results = dict[str, NL]
