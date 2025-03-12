@@ -3,7 +3,6 @@
 import ast
 import collections
 import dataclasses
-import re
 import secrets
 import sys
 from functools import lru_cache
@@ -316,10 +315,10 @@ def _get_code_start(src: str) -> str:
     start of the line and returns it. If such line doesn't exist, it returns an
     empty string.
     """
-    for match in re.finditer(".+", src):
-        line = match.group(0).lstrip()
-        if line and not line.startswith("#"):
-            return line
+    for line in src.splitlines():
+        stripped_line = line.lstrip()
+        if stripped_line and not stripped_line.startswith("#"):
+            return stripped_line
     return ""
 
 
