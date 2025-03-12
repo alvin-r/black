@@ -253,17 +253,13 @@ class Node(Base):
         """
         assert type >= 256, type
         self.type = type
-        self.children = list(children)
+        self.children = [ch for ch in children]
         for ch in self.children:
             assert ch.parent is None, repr(ch)
             ch.parent = self
         self.invalidate_sibling_maps()
-        if prefix is not None:
-            self.prefix = prefix
-        if fixers_applied:
-            self.fixers_applied = fixers_applied[:]
-        else:
-            self.fixers_applied = None
+        self.prefix = prefix if prefix is not None else ""
+        self.fixers_applied = fixers_applied[:] if fixers_applied else None
 
     def __repr__(self) -> str:
         """Return a canonical string representation."""
@@ -284,7 +280,7 @@ class Node(Base):
 
     def _eq(self, other: Base) -> bool:
         """Compare two nodes for equality."""
-        return (self.type, self.children) == (other.type, other.children)
+        return self.type == other.type and self.children == other.children
 
     def clone(self) -> "Node":
         assert self.type is not None
