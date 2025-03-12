@@ -64,11 +64,10 @@ def _splitlines_no_ff(source: str) -> list[str]:
 
     This mimics how the Python parser splits source code.
 
-    A simplified version of the function with the same name in Lib/ast.py
+    A simplified version of the function with the same name in Lib/ast.py.
+    Optimized to use built-in splitlines() method and remove post-processing.
     """
-    result = [match[0] for match in _line_pattern.finditer(source)]
-    if result[-1] == "":
-        result.pop(-1)
+    result = source.splitlines(keepends=True)
     return result
 
 
