@@ -13,6 +13,8 @@ from packaging.version import InvalidVersion, Version
 from pathspec import PathSpec
 from pathspec.patterns.gitwildmatch import GitWildMatchPatternError
 
+from black.mode import TargetVersion
+
 if sys.version_info >= (3, 11):
     try:
         import tomllib
@@ -148,22 +150,14 @@ def infer_target_version(
     project_metadata = pyproject_toml.get("project", {})
     requires_python = project_metadata.get("requires-python", None)
     if requires_python is not None:
-        try:
-            return parse_req_python_version(requires_python)
-        except InvalidVersion:
-            pass
-        try:
-            return parse_req_python_specifier(requires_python)
-        except (InvalidSpecifier, InvalidVersion):
-            pass
-
+        return try_parse_versions(requires_python)
     return None
 
 
 def parse_req_python_version(requires_python: str) -> Optional[list[TargetVersion]]:
     """Parse a version string (i.e. ``"3.7"``) to a list of TargetVersion.
 
-    If parsing fails, will raise a packaging.version.InvalidVersion error.
+    If parsing fails, raises a packaging.version.InvalidVersion error.
     If the parsed version cannot be mapped to a valid TargetVersion, returns None.
     """
     version = Version(requires_python)
@@ -178,7 +172,7 @@ def parse_req_python_version(requires_python: str) -> Optional[list[TargetVersio
 def parse_req_python_specifier(requires_python: str) -> Optional[list[TargetVersion]]:
     """Parse a specifier string (i.e. ``">=3.7,<3.10"``) to a list of TargetVersion.
 
-    If parsing fails, will raise a packaging.specifiers.InvalidSpecifier error.
+    If parsing fails, raises a packaging.specifiers.InvalidSpecifier error.
     If the parsed specifier cannot be mapped to a valid TargetVersion, returns None.
     """
     specifier_set = strip_specifier_set(SpecifierSet(requires_python))
@@ -186,7 +180,7 @@ def parse_req_python_specifier(requires_python: str) -> Optional[list[TargetVers
         return None
 
     target_version_map = {f"3.{v.value}": v for v in TargetVersion}
-    compatible_versions: list[str] = list(specifier_set.filter(target_version_map))
+    compatible_versions = filter_target_versions(specifier_set, target_version_map)
     if compatible_versions:
         return [target_version_map[v] for v in compatible_versions]
     return None
@@ -424,3 +418,25 @@ def wrap_stream_for_windows(
     else:
         # Set `strip=False` to avoid needing to modify test_express_diff_with_color.
         return wrap_stream(f, convert=None, strip=False, autoreset=False, wrap=True)
+
+
+def try_parse_versions(requires_python: str) -> Optional[list[TargetVersion]]:
+    """Try parsing a version or specifier string to a list of TargetVersion.
+
+    If none of the attempts succeed, returns None.
+    """
+    try:
+        return parse_req_python_version(requires_python)
+    except InvalidVersion:
+        try:
+            return parse_req_python_specifier(requires_python)
+        except (InvalidSpecifier, InvalidVersion):
+            return None
+
+
+def filter_target_versions(specifier_set: SpecifierSet, target_version_map: dict[str, TargetVersion]) -> list[str]:
+    """Filter target versions based on the specifier set
+
+    Returns a list of compatible version strings.
+    """
+    return list(specifier_set.filter(target_version_map))
