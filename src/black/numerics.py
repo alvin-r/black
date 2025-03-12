@@ -28,9 +28,17 @@ def format_scientific_notation(text: str) -> str:
 
 def format_complex_number(text: str) -> str:
     """Formats a complex string like `10j`"""
-    number = text[:-1]
+    # Directly format the numeric part by identifying if it contains a decimal point
     suffix = text[-1]
-    return f"{format_float_or_int_string(number)}{suffix}"
+    number = text[:-1]
+    
+    if "." in number:
+        before, after = number.split(".")
+        formatted_number = f"{before or '0'}.{after or '0'}"
+    else:
+        formatted_number = number
+        
+    return f"{formatted_number}{suffix}"
 
 
 def format_float_or_int_string(text: str) -> str:
