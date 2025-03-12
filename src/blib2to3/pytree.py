@@ -152,11 +152,13 @@ class Base:
     def get_lineno(self) -> Optional[int]:
         """Return the line number which generated the invocant node."""
         node = self
-        while not isinstance(node, Leaf):
-            if not node.children:
-                return None
-            node = node.children[0]
-        return node.lineno
+        children = self.children
+        while children:
+            node = children[0]
+            if isinstance(node, Leaf):
+                return node.lineno
+            children = node.children
+        return None
 
     def changed(self) -> None:
         if self.was_changed:
