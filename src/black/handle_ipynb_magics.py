@@ -10,6 +10,8 @@ from functools import lru_cache
 from importlib.util import find_spec
 from typing import Optional
 
+from typing_extensions import TypeGuard
+
 if sys.version_info >= (3, 10):
     from typing import TypeGuard
 else:
@@ -330,12 +332,14 @@ def _is_ipython_magic(node: ast.expr) -> TypeGuard[ast.Attribute]:
     will already have been processed by IPython's
     TransformerManager().transform_cell.
     """
-    return (
-        isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Name)
-        and node.value.func.id == "get_ipython"
-    )
+    # Check the node structure step-by-step to avoid unnecessary isinstance calls.
+    if not isinstance(node, ast.Attribute):
+        return False
+    value = node.value
+    if not isinstance(value, ast.Call):
+        return False
+    func = value.func
+    return isinstance(func, ast.Name) and func.id == "get_ipython"
 
 
 def _get_str_args(args: list[ast.expr]) -> list[str]:
