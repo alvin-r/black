@@ -171,9 +171,10 @@ class Base:
         parent's children before it was removed.
         """
         if self.parent:
-            for i, node in enumerate(self.parent.children):
-                if node is self:
-                    del self.parent.children[i]
+            children = self.parent.children
+            for i in range(len(children)):
+                if children[i] is self:
+                    children.pop(i)
                     self.parent.changed()
                     self.parent.invalidate_sibling_maps()
                     self.parent = None
