@@ -2409,7 +2409,7 @@ class StringParser:
             True iff @leaf is a part of the string's trailer.
         """
         # We ignore empty LPAR or RPAR leaves.
-        if is_empty_par(leaf):
+        if leaf.type == token.LPAR and leaf.value == "" or leaf.type == token.RPAR and leaf.value == "":
             return True
 
         next_token = leaf.type
@@ -2425,21 +2425,11 @@ class StringParser:
                 self._unmatched_lpars -= 1
                 if self._unmatched_lpars == 0:
                     self._state = self.RPAR
-        # Otherwise, we use a lookup table to determine the next state.
         else:
-            # If the lookup table matches the current state to the next
-            # token, we use the lookup table.
-            if (current_state, next_token) in self._goto:
-                self._state = self._goto[current_state, next_token]
-            else:
-                # Otherwise, we check if a the current state was assigned a
-                # default.
-                if (current_state, self.DEFAULT_TOKEN) in self._goto:
-                    self._state = self._goto[current_state, self.DEFAULT_TOKEN]
-                # If no default has been assigned, then this parser has a logic
-                # error.
-                else:
-                    raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
+            # Use lookup table with default fallback
+            self._state = self._goto.get((current_state, next_token), self._goto.get((current_state, self.DEFAULT_TOKEN)))
+            if self._state is None:
+                raise RuntimeError(f"{self.__class__.__name__} LOGIC ERROR!")
 
             if self._state == self.DONE:
                 return False
