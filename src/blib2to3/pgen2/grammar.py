@@ -133,21 +133,25 @@ class Grammar:
         Copy the grammar.
         """
         new = self.__class__()
-        for dict_attr in (
-            "symbol2number",
-            "number2symbol",
-            "dfas",
-            "keywords",
-            "soft_keywords",
-            "tokens",
-            "symbol2label",
-        ):
-            setattr(new, dict_attr, getattr(self, dict_attr).copy())
+
+        # Optimized copying of dictionaries
+        new.symbol2number = self.symbol2number.copy()
+        new.number2symbol = self.number2symbol.copy()
+        new.dfas = self.dfas.copy()
+        new.keywords = self.keywords.copy()
+        new.soft_keywords = self.soft_keywords.copy()
+        new.tokens = self.tokens.copy()
+        new.symbol2label = self.symbol2label.copy()
+        
+        # Optimized copying of lists
         new.labels = self.labels[:]
         new.states = self.states[:]
+
+        # Direct attribute copying
         new.start = self.start
         new.version = self.version
         new.async_keywords = self.async_keywords
+
         return new
 
     def report(self) -> None:
